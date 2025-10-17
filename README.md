@@ -81,82 +81,7 @@ import os
 os.environ["DEEPCELL_ACCESS_TOKEN"] = "<your-token>"
 ```
 
----
 
-## 🧩 Running the Workflow
-
-### 1. **Prepare Input Data**
-
-Place microscopy images under:
-```
-input-data/img_test/
-├── img.ome.tif
-├── config.yaml
-```
-
-### 2. **Run Cell Segmentation**
-```bash
-python src/cell_segmentation.py --input input-data/img_test/img.ome.tif --output output-data/img_test/
-```
-
-Outputs include:
-- `mask.tif` — segmented cells  
-- `cell_populations.csv` — per-cell metrics  
-
-### 3. **Run Cell Annotation**
-```bash
-python src/cell_annotation.py --input output-data/img_test/cell_populations.csv --output output-data/img_test/
-```
-
-This step communicates with the **DeepCell API** to classify cell types.
-
-### 4. **Generate Final Report**
-```bash
-python src/run_inference_pipeline.py --input output-data/img_test/ --output output-data/img_test/
-```
-
-Output includes:
-- `cell_types.csv` — predicted cell types  
-- `cell_report.json` — summary statistics  
-
----
-
-## 📂 Directory Structure
-
-```
-hra-deepcell-experiments/
-├── scripts/
-│   ├── setup.sh                      # Environment setup script
-│   └── download_hubmap_data.sh       # Optional: Download HuBMAP data
-│
-├── nbs/
-│   ├── tutorial_cellsam_deepcelltypes.ipynb  # Guided pipeline tutorial
-│   └── hubmap_cellsam_deepcelltypes.ipynb    # HuBMAP example workflow
-│
-├── src/
-│   ├── __init__.py
-│   ├── cell_segmentation.py          # Runs CellSAM segmentation
-│   ├── cell_annotation.py            # DeepCell Types annotation
-│   ├── dataset.py                    # Data loader utilities
-│   ├── utils.py                      # Helper functions
-│   └── run_inference_pipeline.py     # Full segmentation + annotation pipeline
-│
-├── input-data/
-│   └── img_test/
-│       ├── img.ome.tif
-│       └── config.yaml
-│
-├── output-data/
-│   └── img_test/
-│       ├── mask.tif
-│       ├── cell_types.csv
-│       ├── cell_populations.csv
-│       └── cell_report.json
-│
-└── README.md
-```
-
----
 
 ## 📊 Expected Outputs
 
@@ -164,7 +89,7 @@ After a successful run, you will obtain:
 - **`mask.tif`** — labeled segmentation masks  
 - **`cell_populations.csv`** — morphological cell metrics  
 - **`cell_types.csv`** — annotated cell types  
-- **`cell_report.json`** — summary of population statistics  
+
 
 ---
 
