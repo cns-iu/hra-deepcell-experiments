@@ -81,7 +81,7 @@ import os
 os.environ["DEEPCELL_ACCESS_TOKEN"] = "<your-token>"
 ```
 
-
+---
 
 ## 📊 Expected Outputs
 
@@ -101,7 +101,4 @@ After a successful run, you will obtain:
 
 ---
 
-## 👥 Authors
 
-**Satyam Dubey**, **Yash**, and collaborators  
-📧 sbdubey@iu.edu  
