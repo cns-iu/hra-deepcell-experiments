@@ -1,0 +1,18 @@
+# Ignore everything by default
+*
+
+# But include all directories (so Git can traverse them)
+!*/
+
+# Include everything else (unignore all files)
+!**
+
+# Finally, explicitly ignore only this specific file
+/input-data/img_test/reg001_expr.ome.tiff
+
+# Optional: Common system & Python junk files
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+.DS_Store
