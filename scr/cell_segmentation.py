@@ -22,7 +22,59 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from cellSAM import cellsam_pipeline
-from cellSAM.utils import normalize_image
+
+
+# --------------------------------------------------------------------------- #
+#                            Helper functions                                 #
+# --------------------------------------------------------------------------- #
+def _infer_channel_axis(shape, required_max_idx):
+    """
+    Find an axis in `shape` whose size is > required_max_idx.
+    Prefer earlier axes if multiple match.
+    """
+    for ax, s in enumerate(shape):
+        if s > required_max_idx:
+            return ax
+    return None
+
+
+def _slice_to_2d(img, channel_axis, channel_index):
+    """
+    Slice the ND image to return a 2D (Y, X) array for the requested channel.
+    - channel_axis: axis index in img which corresponds to channels
+    - channel_index: which channel to select (0-based, as in config)
+    Strategy:
+      * Set selector[channel_axis] = channel_index
+      * For any other axis except the last two (assumed Y,X) if size > 1 choose index 0
+      * Squeeze and ensure the result is 2D
+    """
+    if channel_index >= img.shape[channel_axis]:
+        raise IndexError(
+            f"Channel index {channel_index} out of bounds for axis {channel_axis} with size {img.shape[channel_axis]}"
+        )
+
+    sel = [slice(None)] * img.ndim
+    sel[channel_axis] = int(channel_index)
+
+    # Identify last two axes as Y, X
+    y_axis = img.ndim - 2
+    x_axis = img.ndim - 1
+
+    # For other axes (time/z/etc.), if size > 1 choose index 0 (first plane)
+    for ax in range(img.ndim):
+        if ax == channel_axis or ax in (y_axis, x_axis):
+            continue
+        if img.shape[ax] > 1:
+            sel[ax] = 0  # pick first z/frame
+
+    arr = img[tuple(sel)]
+    arr = np.squeeze(arr)
+
+    if arr.ndim != 2:
+        # If there are still extra dims, try to collapse to last two dims
+        arr = arr.reshape(arr.shape[-2], arr.shape[-1])
+
+    return arr
 
 
 # --------------------------------------------------------------------------- #
@@ -56,74 +108,46 @@ def run_segmentation(input_dir: str, output_name: str):
     img = iio.imread(image_path)
     print(f"Image loaded: {img.shape}, dtype={img.dtype}")
 
-    # --- Step 3: Handle channel/Z-axis inference ---
-    # Typical OME-TIFF shapes:
-    #  (C, Z, Y, X), (Z, C, Y, X), (Z, Y, X), or (Y, X)
-    ndim = img.ndim
+    # --- Step 3: Read channel indices from config ---
+    channels_cfg = config.get("channels", [])
+    if len(channels_cfg) < 2:
+        raise ValueError("Config must contain at least two channels under 'channels'")
 
-    if ndim == 4:
-        # Determine which axis is channels
-        if img.shape[0] < 10:  # channels first
-            cdim = 0
-        elif img.shape[1] < 10:
-            cdim = 1
-        else:
-            raise ValueError("Cannot infer channel dimension from shape.")
-    elif ndim == 3:
-        # Single channel Z-stack (Z, Y, X)
-        cdim = None
-    elif ndim == 2:
-        # Single plane grayscale
-        cdim = None
-    else:
-        raise ValueError(f"Unsupported image shape: {img.shape}")
+    ch1_idx = int(channels_cfg[0]["number"])
+    ch2_idx = int(channels_cfg[1]["number"])
 
-    # --- Step 4: Extract or synthesize channels ---
-    channels = config["channels"]
-    ch1 = channels[0]
-    ch2 = channels[1]
-    ch1_idx, ch2_idx = ch1["number"], ch2["number"]
-
+    max_req_idx = max(ch1_idx, ch2_idx)
     print("Using channels:")
-    print(f" - {ch1['name']} (index={ch1_idx})")
-    print(f" - {ch2['name']} (index={ch2_idx})")
+    print(f" - {channels_cfg[0]['name']} (index={ch1_idx})")
+    print(f" - {channels_cfg[1]['name']} (index={ch2_idx})")
 
-    if cdim is None:
-        # No explicit channels; use same image twice as pseudo-channels
-        hoechst = np.mean(img, axis=0) if img.ndim == 3 else img
-        cytokeratin = hoechst.copy()
-        print("⚠️ Single-channel image detected; duplicating channel for segmentation.")
-    else:
-        if cdim == 0:
-            # shape (C, Z, Y, X)
-            if img.shape[1] == 1:
-                hoechst = img[ch1_idx, 0]
-                cytokeratin = img[ch2_idx, 0] if ch2_idx < img.shape[0] else img[ch1_idx, 0]
-            else:
-                hoechst = np.mean(img[ch1_idx], axis=0)
-                cytokeratin = np.mean(img[ch2_idx], axis=0)
-        else:
-            # shape (Z, C, Y, X)
-            if img.shape[1] == 1:
-                hoechst = img[0, 0]
-                cytokeratin = img[0, 0]
-                print("⚠️ Only one channel present across Z; duplicating channel.")
-            else:
-                hoechst = np.mean(img[:, ch1_idx], axis=0)
-                cytokeratin = np.mean(img[:, ch2_idx], axis=0)
+    # --- Step 4: Infer channel axis robustly ---
+    channel_axis = _infer_channel_axis(img.shape, max_req_idx)
+    if channel_axis is None:
+        raise IndexError(
+            f"Could not find an axis in image shape {img.shape} that can hold channel index {max_req_idx}. "
+            f"Check config and image layout."
+        )
+    print(f"Inferred channel axis: {channel_axis} (axis length = {img.shape[channel_axis]})")
 
-    # --- Step 5: Stack into (2, Y, X) ---
-    selected = np.stack([hoechst, cytokeratin], axis=0)
-    print(f"Selected stacked image shape: {selected.shape}")
+    # --- Step 5: Slice out the two channels as 2D images (z-plane selected if present) ---
+    hoechst1 = _slice_to_2d(img, channel_axis, ch1_idx)
+    cytokeratin = _slice_to_2d(img, channel_axis, ch2_idx)
 
-    # --- Step 6: Save visualization ---
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    axes[0].imshow(hoechst, cmap="gray")
-    axes[0].set_title(f"{ch1['name']} (Channel {ch1_idx})")
+    # Ensure both are 2D and same shape
+    if hoechst1.shape != cytokeratin.shape:
+        raise ValueError(f"Selected channels have incompatible shapes: {hoechst1.shape} vs {cytokeratin.shape}")
+
+    print(f"Selected shapes -> Hoechst1: {hoechst1.shape}, Cytokeratin: {cytokeratin.shape}")
+
+    # --- Step 6: Save preview of the selected channels (sanity check) ---
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    axes[0].imshow(hoechst1, cmap="gray")
+    axes[0].set_title(f"{channels_cfg[0]['name']} (Channel {ch1_idx})")
     axes[0].axis("off")
 
     axes[1].imshow(cytokeratin, cmap="gray")
-    axes[1].set_title(f"{ch2['name']} (Channel {ch2_idx})")
+    axes[1].set_title(f"{channels_cfg[1]['name']} (Channel {ch2_idx})")
     axes[1].axis("off")
 
     plt.tight_layout()
@@ -131,16 +155,21 @@ def run_segmentation(input_dir: str, output_name: str):
     plt.close(fig)
     print("✅ Channel preview saved as channel_preview.png")
 
-    # --- Step 7: Prepare pseudo-RGB ---
-    rgb_img = np.zeros((3, *selected.shape[1:]), dtype=np.float32)
-    rgb_img[1] = normalize_image(selected[0])  # nuclear → G
-    rgb_img[2] = normalize_image(selected[1])  # membrane → B
-    rgb_img = np.transpose(rgb_img, (1, 2, 0))  # (Y, X, 3)
+    # --- Step 7: Build the 3-channel CellSAM-compatible image (no normalization) ---
+    # Channel 0 (R): blank
+    # Channel 1 (G): Hoechst1
+    # Channel 2 (B): Cytokeratin
+    blank_channel = np.zeros_like(hoechst1, dtype=np.float32)
+    g_chan = hoechst1.astype(np.float32, copy=False)
+    b_chan = cytokeratin.astype(np.float32, copy=False)
+    three_channel_img = np.stack([blank_channel, g_chan, b_chan], axis=-1)  # shape (Y, X, 3)
 
-    # --- Step 8: Run segmentation pipeline ---
+    print("Final input image shape:", three_channel_img.shape)  # (Y, X, 3)
+
+    # --- Step 8: Run segmentation pipeline (pass use_wsi from config) ---
     print("Running segmentation...")
     mask = cellsam_pipeline(
-        rgb_img,
+        three_channel_img,
         use_wsi=use_wsi,
         low_contrast_enhancement=True,
         gauge_cell_size=False
