@@ -2,16 +2,29 @@
 """
 segmentation.py
 ----------------
-CLI and module-compatible script for running segmentation on OME-TIFF images
-based on config.yaml.
+Generalized CLI and module-compatible script for running cell segmentation
+on OME-TIFF images using the CellSAM pipeline.
+
+This script is designed for flexible use — it supports any two imaging channels
+specified in a YAML configuration file, making it suitable for API-driven or
+batch processing workflows.
 
 Usage (CLI):
     python segmentation.py --input_dir /path/to/input --output_name mask_output.tiff
 
-Expected input directory:
+Expected directory structure:
     /path/to/input/
-        ├── reg001_expr.ome.tiff
+        ├── <image>.ome.tiff
         └── config.yaml
+
+The config.yaml file must specify:
+    image_path: "reg001_expr.ome.tiff"
+    use_wsi: true
+    channels:
+      - name: "ChannelA_name"
+        number: 0
+      - name: "ChannelB_name"
+        number: 48
 """
 
 import argparse
@@ -29,49 +42,51 @@ from cellSAM import cellsam_pipeline
 # --------------------------------------------------------------------------- #
 def _infer_channel_axis(shape, required_max_idx):
     """
-    Find an axis in `shape` whose size is > required_max_idx.
-    Prefer earlier axes if multiple match.
+    Identify the axis in the image corresponding to the channel dimension.
+
+    Args:
+        shape (tuple): Image shape (can be 4D, 5D, etc.)
+        required_max_idx (int): Maximum channel index requested by config
+
+    Returns:
+        int or None: The axis index that represents channels, or None if not found
     """
-    for ax, s in enumerate(shape):
-        if s > required_max_idx:
+    for ax, size in enumerate(shape):
+        if size > required_max_idx:
             return ax
     return None
 
 
-def _slice_to_2d(img, channel_axis, channel_index):
+def _extract_2d_channel(img, channel_axis, channel_index):
     """
-    Slice the ND image to return a 2D (Y, X) array for the requested channel.
-    - channel_axis: axis index in img which corresponds to channels
-    - channel_index: which channel to select (0-based, as in config)
-    Strategy:
-      * Set selector[channel_axis] = channel_index
-      * For any other axis except the last two (assumed Y,X) if size > 1 choose index 0
-      * Squeeze and ensure the result is 2D
+    Extract a single 2D channel image from a potentially multi-dimensional OME-TIFF.
+
+    Args:
+        img (ndarray): Input image (N-D)
+        channel_axis (int): Axis corresponding to channels
+        channel_index (int): Index of the desired channel
+
+    Returns:
+        2D ndarray: Extracted (Y, X) image
     """
     if channel_index >= img.shape[channel_axis]:
         raise IndexError(
-            f"Channel index {channel_index} out of bounds for axis {channel_axis} with size {img.shape[channel_axis]}"
+            f"Channel index {channel_index} out of bounds for axis {channel_axis} (size={img.shape[channel_axis]})"
         )
 
-    sel = [slice(None)] * img.ndim
-    sel[channel_axis] = int(channel_index)
+    # Build a slicing selector
+    selector = [slice(None)] * img.ndim
+    selector[channel_axis] = int(channel_index)
 
-    # Identify last two axes as Y, X
-    y_axis = img.ndim - 2
-    x_axis = img.ndim - 1
-
-    # For other axes (time/z/etc.), if size > 1 choose index 0 (first plane)
-    for ax in range(img.ndim):
-        if ax == channel_axis or ax in (y_axis, x_axis):
+    # Assume the last two axes are Y, X. If extra axes exist (Z, T, etc.), select the first frame
+    for ax in range(img.ndim - 2):  # skip last two (Y, X)
+        if ax == channel_axis:
             continue
         if img.shape[ax] > 1:
-            sel[ax] = 0  # pick first z/frame
+            selector[ax] = 0
 
-    arr = img[tuple(sel)]
-    arr = np.squeeze(arr)
-
+    arr = np.squeeze(img[tuple(selector)])
     if arr.ndim != 2:
-        # If there are still extra dims, try to collapse to last two dims
         arr = arr.reshape(arr.shape[-2], arr.shape[-1])
 
     return arr
@@ -82,7 +97,7 @@ def _slice_to_2d(img, channel_axis, channel_index):
 # --------------------------------------------------------------------------- #
 def run_segmentation(input_dir: str, output_name: str):
     """
-    Runs segmentation using image + config in the input directory.
+    Run segmentation using an image and configuration file in the input directory.
 
     Args:
         input_dir (str): Path containing the .ome.tiff image and config.yaml
@@ -104,50 +119,51 @@ def run_segmentation(input_dir: str, output_name: str):
 
     use_wsi = config.get("use_wsi", True)
 
-    # --- Step 2: Read image ---
+    # --- Step 2: Load image ---
     img = iio.imread(image_path)
-    print(f"Image loaded: {img.shape}, dtype={img.dtype}")
+    print(f"🧠 Image loaded: shape={img.shape}, dtype={img.dtype}")
 
-    # --- Step 3: Read channel indices from config ---
+    # --- Step 3: Parse channel configuration ---
     channels_cfg = config.get("channels", [])
     if len(channels_cfg) < 2:
-        raise ValueError("Config must contain at least two channels under 'channels'")
+        raise ValueError("Config must specify at least two channels under 'channels'.")
 
-    ch1_idx = int(channels_cfg[0]["number"])
-    ch2_idx = int(channels_cfg[1]["number"])
+    ch_a_idx = int(channels_cfg[0]["number"])
+    ch_b_idx = int(channels_cfg[1]["number"])
+    ch_a_name = channels_cfg[0]["name"]
+    ch_b_name = channels_cfg[1]["name"]
 
-    max_req_idx = max(ch1_idx, ch2_idx)
-    print("Using channels:")
-    print(f" - {channels_cfg[0]['name']} (index={ch1_idx})")
-    print(f" - {channels_cfg[1]['name']} (index={ch2_idx})")
+    print("🎨 Selected channels:")
+    print(f" - {ch_a_name} (index={ch_a_idx})")
+    print(f" - {ch_b_name} (index={ch_b_idx})")
 
-    # --- Step 4: Infer channel axis robustly ---
-    channel_axis = _infer_channel_axis(img.shape, max_req_idx)
+    # --- Step 4: Detect channel axis automatically ---
+    channel_axis = _infer_channel_axis(img.shape, max(ch_a_idx, ch_b_idx))
     if channel_axis is None:
         raise IndexError(
-            f"Could not find an axis in image shape {img.shape} that can hold channel index {max_req_idx}. "
-            f"Check config and image layout."
+            f"Could not identify channel axis for shape {img.shape}. "
+            f"Check the channel indices in config.yaml."
         )
-    print(f"Inferred channel axis: {channel_axis} (axis length = {img.shape[channel_axis]})")
 
-    # --- Step 5: Slice out the two channels as 2D images (z-plane selected if present) ---
-    hoechst1 = _slice_to_2d(img, channel_axis, ch1_idx)
-    cytokeratin = _slice_to_2d(img, channel_axis, ch2_idx)
+    print(f"📏 Inferred channel axis: {channel_axis} (length={img.shape[channel_axis]})")
 
-    # Ensure both are 2D and same shape
-    if hoechst1.shape != cytokeratin.shape:
-        raise ValueError(f"Selected channels have incompatible shapes: {hoechst1.shape} vs {cytokeratin.shape}")
+    # --- Step 5: Extract individual channel planes ---
+    channel_a = _extract_2d_channel(img, channel_axis, ch_a_idx)
+    channel_b = _extract_2d_channel(img, channel_axis, ch_b_idx)
 
-    print(f"Selected shapes -> Hoechst1: {hoechst1.shape}, Cytokeratin: {cytokeratin.shape}")
+    if channel_a.shape != channel_b.shape:
+        raise ValueError(f"Channel shape mismatch: {channel_a.shape} vs {channel_b.shape}")
 
-    # --- Step 6: Save preview of the selected channels (sanity check) ---
+    print(f"🧩 Extracted channel shapes: {channel_a.shape}")
+
+    # --- Step 6: Save a quick channel visualization for QC ---
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-    axes[0].imshow(hoechst1, cmap="gray")
-    axes[0].set_title(f"{channels_cfg[0]['name']} (Channel {ch1_idx})")
+    axes[0].imshow(channel_a, cmap="gray")
+    axes[0].set_title(f"{ch_a_name} (Channel {ch_a_idx})")
     axes[0].axis("off")
 
-    axes[1].imshow(cytokeratin, cmap="gray")
-    axes[1].set_title(f"{channels_cfg[1]['name']} (Channel {ch2_idx})")
+    axes[1].imshow(channel_b, cmap="gray")
+    axes[1].set_title(f"{ch_b_name} (Channel {ch_b_idx})")
     axes[1].axis("off")
 
     plt.tight_layout()
@@ -155,30 +171,28 @@ def run_segmentation(input_dir: str, output_name: str):
     plt.close(fig)
     print("✅ Channel preview saved as channel_preview.png")
 
-    # --- Step 7: Build the 3-channel CellSAM-compatible image (no normalization) ---
-    # Channel 0 (R): blank
-    # Channel 1 (G): Hoechst1
-    # Channel 2 (B): Cytokeratin
-    blank_channel = np.zeros_like(hoechst1, dtype=np.float32)
-    g_chan = hoechst1.astype(np.float32, copy=False)
-    b_chan = cytokeratin.astype(np.float32, copy=False)
-    three_channel_img = np.stack([blank_channel, g_chan, b_chan], axis=-1)  # shape (Y, X, 3)
+    # --- Step 7: Build the CellSAM-compatible 3-channel image ---
+    # R = blank; G = channel_a; B = channel_b
+    blank = np.zeros_like(channel_a, dtype=np.float32)
+    channel_a = channel_a.astype(np.float32, copy=False)
+    channel_b = channel_b.astype(np.float32, copy=False)
 
-    print("Final input image shape:", three_channel_img.shape)  # (Y, X, 3)
+    input_img = np.stack([blank, channel_a, channel_b], axis=-1)
+    print("🧮 Prepared 3-channel image for segmentation:", input_img.shape)
 
-    # --- Step 8: Run segmentation pipeline (pass use_wsi from config) ---
-    print("Running segmentation...")
+    # --- Step 8: Run CellSAM segmentation pipeline ---
+    print("⚙️  Running segmentation...")
     mask = cellsam_pipeline(
-        three_channel_img,
+        input_img,
         use_wsi=use_wsi,
         low_contrast_enhancement=True,
         gauge_cell_size=False
     )
 
-    # --- Step 9: Save segmentation mask ---
+    # --- Step 9: Save output segmentation mask ---
     output_path = Path(output_name).resolve()
     tifffile.imwrite(output_path, mask.astype(np.uint16))
-    print(f"✅ Segmentation completed and saved to {output_path}")
+    print(f"🏁 Segmentation completed successfully.\n🖼️  Output saved to: {output_path}")
 
     return output_path
 
@@ -187,7 +201,7 @@ def run_segmentation(input_dir: str, output_name: str):
 #                            CLI Entrypoint                                   #
 # --------------------------------------------------------------------------- #
 def main():
-    parser = argparse.ArgumentParser(description="Run cell segmentation on OME-TIFF images.")
+    parser = argparse.ArgumentParser(description="Run generalized cell segmentation on OME-TIFF images.")
     parser.add_argument(
         "--input_dir", type=str, required=True,
         help="Directory containing the .ome.tiff image and config.yaml"
