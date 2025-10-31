@@ -16,3 +16,5 @@ __pycache__/
 *.pyo
 .ipynb_checkpoints/
 .DS_Store
+segmentation_mask.tiff
+segmentation_mask.tif
