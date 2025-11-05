@@ -152,3 +152,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+# python3 /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/scr/cell_annotations.py   --input_dir /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/input-data/img_test   --input_segmentation /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/segmentation_mask.tif   --output_dir /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/results
