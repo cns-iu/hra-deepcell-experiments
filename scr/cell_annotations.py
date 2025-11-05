@@ -52,7 +52,7 @@ def run_annotation(input_dir: str, input_segmentation: str, output_dir: str):
     img = iio.imread(image_path)
     print(f" Image loaded: shape={img.shape}, dtype={img.dtype}")
 
-    # --- Step 2.5: Load markers robustly ---
+    # --- Load markers robustly ---
     markers_cfg = config.get("markers", [])
     if isinstance(markers_cfg, dict):
         markers_cfg = [markers_cfg]
