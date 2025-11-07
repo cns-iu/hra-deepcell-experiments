@@ -109,82 +109,75 @@ import os
 os.environ["DEEPCELL_ACCESS_TOKEN"] = "<your-token>"
 ```
 
-<!-- ---
+---
 
-## 🧩 Running the Workflow
+## 🌐 HuBMAP GLOBUS API Setup
 
-### 1. **Prepare Input Data**
+To enable data access from the [HuBMAP Data Portal](https://docs.hubmapconsortium.org/apis.html) or interact programmatically with the **Search & Index API**, follow these steps for Globus authentication.
 
-Place microscopy images under:
-```
-input-data/img_test/
-├── img.ome.tif
-├── config.yaml
-```
-
-### 2. **Run Cell Segmentation**
+### ✅ 1. Install Atlas Consortia Command Line Tools
 ```bash
-python src/cell_segmentation.py --input input-data/img_test/img.ome.tif --output output-data/img_test/
+pip install atlas-consortia-clt
 ```
 
-Outputs include:
-- `mask.tif` — segmented cells  
-- `cell_populations.csv` — per-cell metrics  
-
-### 3. **Run Cell Annotation**
+### ✅ 2. Authenticate using Globus CLI
 ```bash
-python src/cell_annotation.py --input output-data/img_test/cell_populations.csv --output output-data/img_test/
+globus login --no-local-server
 ```
+Copy the link shown in the terminal, open it in your browser, complete the authentication, and authorize Globus access.
 
-This step communicates with the **DeepCell API** to classify cell types.
-
-### 4. **Generate Final Report**
+To verify authentication:
 ```bash
-python src/run_inference_pipeline.py --input output-data/img_test/ --output output-data/img_test/
+globus whoami --verbose
 ```
-
-Output includes:
-- `cell_types.csv` — predicted cell types  
-- `cell_report.json` — summary statistics  
 
 ---
 
-## 📂 Directory Structure
+### ✅ 3. Create `manifest.txt` file
 
-```
-hra-deepcell-experiments/
-├── scripts/
-│   ├── setup.sh                      # Environment setup script
-│   └── download_hubmap_data.sh       # Optional: Download HuBMAP data
-│
-├── nbs/
-│   ├── tutorial_cellsam_deepcelltypes.ipynb  # Guided pipeline tutorial
-│   └── hubmap_cellsam_deepcelltypes.ipynb    # HuBMAP example workflow
-│
-├── src/
-│   ├── __init__.py
-│   ├── cell_segmentation.py          # Runs CellSAM segmentation
-│   ├── cell_annotation.py            # DeepCell Types annotation
-│   ├── dataset.py                    # Data loader utilities
-│   ├── utils.py                      # Helper functions
-│   └── run_inference_pipeline.py     # Full segmentation + annotation pipeline
-│
-├── input-data/
-│   └── img_test/
-│       ├── img.ome.tif
-│       └── config.yaml
-│
-├── output-data/
-│   └── img_test/
-│       ├── mask.tif
-│       ├── cell_types.csv
-│       ├── cell_populations.csv
-│       └── cell_report.json
-│
-└── README.md
+Follow the [HuBMAP Manifest File Documentation](https://docs.hubmapconsortium.org/clt/index.html#manfiles) to create a `manifest.txt` file listing the dataset(s) to download.  
+⚠️ **Important:** Ensure that there are **no comments** in the manifest file, as they may cause parsing errors.
+
+---
+
+### ✅ 4. Install and Configure Globus Connect Personal
+
+Refer to [How To Install, Configure, and Uninstall Globus Connect Personal for Linux](https://docs.globus.org/globus-connect-personal/install/linux/).  
+You can also download it directly using:
+
+```bash
+wget https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz
 ```
 
---- -->
+Extract and navigate into the directory:
+```bash
+tar -xzf globusconnectpersonal-latest.tgz
+cd globusconnectpersonal-x.y.z
+```
+*(Replace `x.y.z` with the extracted version number.)*
+
+Start Globus Connect Personal for the first time:
+```bash
+./globusconnectpersonal -start &
+```
+Complete setup as prompted. After setup, exit the directory:
+```bash
+cd ..
+```
+
+---
+
+### ✅ 5. Transfer Data using HuBMAP CLI
+
+Once authenticated and your `manifest.txt` is ready, you can transfer HuBMAP data using:
+
+```bash
+hubmap-clt transfer manifest.txt
+```
+
+This will initiate a secure data transfer using Globus.
+
+---
 
 ## 📊 Expected Outputs
 
@@ -192,7 +185,6 @@ After a successful run, you will obtain:
 - **`mask.tif`** — labeled segmentation masks  
 - **`cell_populations.csv`** — morphological cell metrics  
 - **`cell_types.csv`** — annotated cell types  
-  
 
 ---
 
@@ -200,8 +192,8 @@ After a successful run, you will obtain:
 
 - [CellSAM Documentation](https://vanvalenlab.github.io/cellSAM/tutorial.html)  
 - [DeepCell Types Tutorial](https://vanvalenlab.github.io/deepcell-types/site/tutorial.html)  
-- [DeepCell API Setup](https://deepcell.readthedocs.io/en/master/API-key.html)
+- [DeepCell API Setup](https://deepcell.readthedocs.io/en/master/API-key.html)  
+- [HuBMAP API Reference](https://docs.hubmapconsortium.org/apis.html)  
+- [HuBMAP CLT Guide](https://docs.hubmapconsortium.org/clt/index.html#manfiles)
 
 ---
-
-
