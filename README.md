@@ -177,6 +177,28 @@ hubmap-clt transfer manifest.txt
 
 This will initiate a secure data transfer using Globus.
 
+
+### ⚠️ 5.1. Common Error: “Session reauthentication required”
+
+You may see this message:
+```
+The resource you are trying to access requires you to re-authenticate.
+Session reauthentication required (Globus Transfer)
+```
+
+### Fix: Re-authenticate Globus CLI
+
+The CLI will provide a command like:
+
+```
+globus session update <SESSION-ID>
+```
+
+*You have successfully updated your CLI session.
+
+
+
+
 ---
 
 ## 📊 Expected Outputs
