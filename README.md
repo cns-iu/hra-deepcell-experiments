@@ -196,8 +196,7 @@ globus session update <SESSION-ID>
 
 *You have successfully updated your CLI session.
 
-
-
+### ⚠️ Common Error: “Markers are extracted from the .ome.tiff metadata and not the pipeline_config.json due to mismatch size”
 
 ---
 

@@ -1,4 +1,3 @@
-# ...existing code...
 import argparse
 import yaml
 import imageio.v3 as iio 
@@ -8,54 +7,69 @@ from pathlib import Path
 import deepcell_types
 import torch
 from collections import defaultdict
-# ...existing code...
 
-def run_annotation(input_dir: str, input_segmentation: str, output_dir: str):
+
+def run_annotation(input_dir: str, input_segmentation: str, output_dir: str = None):
     """
-    Run Annotation using an image and configuration file and the segmentation image in the input directory.
+    Run Annotation using an image and configuration file and the segmentation image.
 
     Args:
-        input_dir (str): Directory containing the config.yaml and image file (relative image_path used).
-        input_segmentation (str): Path or filename of the segmentation mask (absolute or relative to input_dir).
-        output_dir (str): Directory where CSV outputs will be saved.
+        input_dir (str): Directory containing the config.yaml and image file
+        input_segmentation (str): Path to the segmentation mask
+        output_dir (str): Directory where CSV outputs will be saved (optional)
+    
+    Returns:
+        dict: Paths to the output CSV files
     """
     input_dir = Path(input_dir)
-    config_path = input_dir / "config.yaml"
-    output_dir = Path(output_dir)
+    
+    # Find config file
+    config_path = None
+    for file in input_dir.glob("*config.yaml"):
+        config_path = file
+        break
+    
+    if config_path is None or not config_path.exists():
+        raise FileNotFoundError(f"Config file not found in: {input_dir}")
+    
+    # Set default output directory
+    if output_dir is None:
+        output_dir = input_dir
+    else:
+        output_dir = Path(output_dir)
+    
     output_dir.mkdir(parents=True, exist_ok=True)
 
     segmentation_mask = Path(input_segmentation)
     if not segmentation_mask.exists():
-        # try relative to input_dir
         segmentation_mask = input_dir / input_segmentation
 
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
     if not segmentation_mask.exists():
         raise FileNotFoundError(f"Segmentation mask not found: {segmentation_mask}")
 
-    # --- Step 1: Load configuration ---
+    # Load configuration
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
     mpp = float(config.get("MPP", 0.0))
-    print(f" The value of the MPP is : {mpp} and the datatype is {type(mpp)}")
+    print(f"MPP value: {mpp} (type: {type(mpp)})")
 
     image_path = input_dir / config.get("image_path", "")
     if not image_path.exists():
-        raise FileNotFoundError(f"Image file from config not found: {image_path}")
+        raise FileNotFoundError(f"Image file not found: {image_path}")
 
-    # --- Step 2: Load image and mask ---
+    # Load image and mask
     mask = iio.imread(segmentation_mask)
-    print(f" Segmentation Image loaded: shape={mask.shape}, dtype={mask.dtype}")
+    print(f"Segmentation mask loaded: shape={mask.shape}, dtype={mask.dtype}")
 
     img = iio.imread(image_path)
-    print(f" Image loaded: shape={img.shape}, dtype={img.dtype}")
+    print(f"Image loaded: shape={img.shape}, dtype={img.dtype}")
 
-    # --- Load markers robustly ---
+    # Load markers
     markers_cfg = config.get("markers", [])
     if isinstance(markers_cfg, dict):
         markers_cfg = [markers_cfg]
+    
     all_markers = []
     for m in markers_cfg:
         if isinstance(m, dict):
@@ -65,17 +79,19 @@ def run_annotation(input_dir: str, input_segmentation: str, output_dir: str):
             all_markers.append(name)
         else:
             all_markers.append(str(m))
-    print("Markers:", all_markers)
+    
+    print(f"Markers: {all_markers}")
 
-    # --- Step 3: Squeeze singleton axes if present (C,Z,Y,X) -> (C,Y,X) or (Z,C,Y,X)->(Z,Y,X) ---
+    # Squeeze singleton axes
     img_input = np.squeeze(img)
-    print(f'The input image shape after squeeze is {img_input.shape}')
+    print(f"Input image shape after squeeze: {img_input.shape}")
 
-    # --- Step 4: Deep Cell Annotations ----
+    # Run DeepCell annotations
     model = "deepcell-types_2025-06-09"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     num_data_loader_threads = 1
 
+    print("⚙️  Running cell type annotation...")
     cell_types = deepcell_types.predict(
         img_input,
         mask,
@@ -86,35 +102,25 @@ def run_annotation(input_dir: str, input_segmentation: str, output_dir: str):
         num_workers=num_data_loader_threads,
     )
 
-    print('Done Done Done')
+    print("✅ Annotation complete")
 
+    # Create cell ID to type mapping
     idx_to_pred = dict(enumerate(cell_types, start=1))
 
-    # Convert to DataFrame with correct column names and save
+    # Save per-cell labels
     df_cell_types = pd.DataFrame(list(idx_to_pred.items()), columns=["Cell_ID", "Cell_Name"])
     cell_types_csv = output_dir / "deepcell_type_label.csv"
     df_cell_types.to_csv(cell_types_csv, index=False)
     print(f"✅ Saved per-cell labels → {cell_types_csv}")
 
-    # Convert the 1-1 `cell: type` mapping to a 1-many `type: list-of-cells` mapping
+    # Create population summary
     labels_by_celltype = defaultdict(list)
     for idx, ct in idx_to_pred.items():
         labels_by_celltype[ct].append(idx)
 
-    from pprint import pprint
-
     num_cells = int(np.max(mask))
     print(f"Total number of cells: {num_cells}")
 
-    pprint(
-        {
-            k: f"{len(v)} ({100 * len(v) / num_cells:02.2f}%)"
-            for k, v in labels_by_celltype.items()
-        },
-        sort_dicts=False,
-    )
-
-    # --- Create and save the summary table ---
     pop_summary = {
         k: {"Cell_Count": len(v), "Percentages": 100 * len(v) / num_cells}
         for k, v in labels_by_celltype.items()
@@ -127,7 +133,6 @@ def run_annotation(input_dir: str, input_segmentation: str, output_dir: str):
         .sort_values("Cell_Count", ascending=False)
     )
 
-    # Round percentages for readability
     df_population["Percentages"] = df_population["Percentages"].round(4)
 
     pop_csv = output_dir / "deepcell_population.csv"
@@ -137,23 +142,18 @@ def run_annotation(input_dir: str, input_segmentation: str, output_dir: str):
     return {"cell_types_csv": str(cell_types_csv), "population_csv": str(pop_csv)}
 
 
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Run generalized cell annotations on HUBMAP.")
+    parser = argparse.ArgumentParser(description="Run generalized cell annotations.")
     parser.add_argument("--input_dir", type=str, required=True,
                         help="Directory containing the config.yaml")
-    parser.add_argument("--input_segmentation", type=str, default="segmentation_mask.tif",
-                        help="input filename for the segmentation mask (absolute or relative to input_dir)")
-    parser.add_argument("--output_dir", type=str, default="results",
+    parser.add_argument("--input_segmentation", type=str, required=True,
+                        help="Path to the segmentation mask")
+    parser.add_argument("--output_dir", type=str, default=None,
                         help="Directory to save output CSV files")
+    
     args = parser.parse_args()
     run_annotation(args.input_dir, args.input_segmentation, args.output_dir)
 
+
 if __name__ == "__main__":
     main()
-
-
-
-
-# python3 /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/scr/cell_annotations.py   --input_dir /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/input-data/img_test   --input_segmentation /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/segmentation_mask.tif   --output_dir /u/sbdubey/CLI_HUBMAP/hra-deepcell-experiments/results
