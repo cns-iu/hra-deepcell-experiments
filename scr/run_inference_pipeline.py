@@ -159,3 +159,15 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     run_pipeline(args.input_root, args.output_root)
+
+
+# sample run command
+
+# step 01:
+
+# screen -S deepcell_pipeline
+
+# Step 02:
+
+# python run_inference_pipeline.py --input_root /teradata/sbdubey/deepcell-experiments-data/intestine-codex-stanford/input-data/ --output_root /teradata/sbdubey/deepcell-experiments-data/intestine-codex-stanford/output-data/
+
