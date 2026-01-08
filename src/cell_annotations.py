@@ -133,7 +133,7 @@ def run_annotation(input_dir: str, input_segmentation: str, output_dir: str = No
         .sort_values("Cell_Count", ascending=False)
     )
 
-    df_population["Percentages"] = df_population["Percentages"].round(4)
+    df_population["Percentages"] = df_population["Percentages"]
 
     pop_csv = output_dir / "deepcell_population.csv"
     df_population.to_csv(pop_csv, index=False)

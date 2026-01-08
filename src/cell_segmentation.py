@@ -32,8 +32,12 @@ import tifffile
 import imageio.v3 as iio
 import numpy as np
 import matplotlib.pyplot as plt
+import skimage
 from pathlib import Path
 from cellSAM import cellsam_pipeline
+
+
+
 
 
 def run_segmentation(input_dir: str, output_path: str = None):
@@ -109,6 +113,8 @@ def run_segmentation(input_dir: str, output_path: str = None):
         low_contrast_enhancement=True,
         gauge_cell_size=False
     )
+    mask, _, _ = skimage.segmentation.relabel_sequential(mask)
+    mask = mask.astype(np.uint32)
 
     # Save output
     if output_path is None:
