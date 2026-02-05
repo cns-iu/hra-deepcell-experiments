@@ -36,7 +36,7 @@ You can create the environment using **Conda** or **pip/venv**, as described bel
    ```
 
 3. **Install dependencies**
-   ```bash
+   ```bash  (prefer Python version >= 3.12 )
    pip install -r requirements.txt
    pip install git+https://github.com/vanvalenlab/cellSAM.git
    pip install git+https://github.com/vanvalenlab/deepcell-types@master
