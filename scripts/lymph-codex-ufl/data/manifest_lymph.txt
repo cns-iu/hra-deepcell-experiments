@@ -10,6 +10,8 @@ HBM443.FDHZ.888 /pipeline_output/expr/reg001_expr.ome.tiff
 HBM443.FDHZ.888 /pipelineConfig.json
 HBM938.TNNT.879 /stitched/expressions/reg1_stitched_expressions.ome.tiff
 HBM938.TNNT.879 /pipelineConfig.json
+HBM522.BSZT.385 /stitched/expressions/reg1_stitched_expressions.ome.tiff
+HBM522.BSZT.385 /pipelineConfig.json
 HBM622.JXWQ.554 /stitched/expressions/reg1_stitched_expressions.ome.tiff
 HBM622.JXWQ.554 /pipelineConfig.json
 HBM268.NKXB.243 /stitched/expressions/reg1_stitched_expressions.ome.tiff
