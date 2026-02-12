@@ -337,6 +337,16 @@ echo $DEEPCELL_ACCESS_TOKEN
 
 ---
 
+### 📌 Results Comparison with [hubmap-mirror-data-api](https://github.com/hubmapconsortium/hubmap-mirror-data-api)
+
+Use the two scripts from the `scripts` folder:
+
+1. **`getsample.py`** – Reads HuBMAP Zarr archives from S3, extracts the `cell_types/predictions` attribute (`hubmap_dct`) from each dataset, converts it to a DataFrame with `cell_type` and `CL_id` columns, and writes one CSV per dataset to `ross_results/`. Skips datasets missing the required attribute and logs errors.
+
+2. **`preprocess.py`** – Processes each CSV in `ross_results/`, counts cells per `cell_type`, calculates percentages, sorts by count descending, and outputs summary CSVs to `processed_ross/` with cleaned filenames (e.g., `*_deepcell_population.csv`).
+
+---
+
 ## 🧠 References
 
 - **CellSAM:** [Documentation](https://vanvalenlab.github.io/cellSAM/tutorial.html) | [GitHub](https://github.com/vanvalenlab/cellSAM)
