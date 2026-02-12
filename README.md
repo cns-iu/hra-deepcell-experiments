@@ -1,296 +1,352 @@
 # 🧬 HRA DeepCell Experiments
 
-An integrated framework for **cell segmentation** and **cell type annotation** using [CellSAM](https://vanvalenlab.github.io/cellSAM/index.html) and [DeepCell Types](https://vanvalenlab.github.io/deepcell-types/site/tutorial.html).  
+An integrated framework for **cell segmentation** and **cell type annotation** using [CellSAM](https://vanvalenlab.github.io/cellSAM/index.html) and [DeepCell Types](https://vanvalenlab.github.io/deepcell-types/site/tutorial.html).
+
 This repository provides reproducible pipelines for processing, segmenting, and classifying cells in multi-channel microscopy datasets.
+
+---
+
+## 📑 Table of Contents
+
+- [Overview](#-overview)
+- [Prerequisites](#-prerequisites)
+- [Environment Setup](#️-environment-setup)
+- [API Configuration](#-api-configuration)
+  - [DeepCell API](#deepcell-api)
+  - [HuBMAP Globus API](#hubmap-globus-api)
+- [Workflow](#-workflow)
+- [Expected Outputs](#-expected-outputs)
+- [Troubleshooting](#-troubleshooting)
+- [References](#-references)
 
 ---
 
 ## 🚀 Overview
 
-This repository implements the following workflow:
-1. **Segmentation** with *CellSAM* for identifying single cells in microscopy images.    
-2. **Annotation** with *DeepCell Types* via API for cell identity prediction.  
-3. **Output reports** with per-cell CSVs and visual summaries.
+This repository implements an end-to-end workflow for microscopy image analysis:
+
+1. **Segmentation** — Identify individual cells using *CellSAM*
+2. **Annotation** — Predict cell types using *DeepCell Types* API
+3. **Reporting** — Generate per-cell CSVs and visual summaries
+
+---
+
+## 📋 Prerequisites
+
+- **Python 3.12+** (required)
+- **Conda** or **pip/venv** for environment management
+- **DeepCell API token** (for cell type annotation)
+- **Globus account** (for HuBMAP data access)
+- **GPU recommended** (for faster inference)
 
 ---
 
 ## ⚙️ Environment Setup
 
-This project requires **Python 3.12**.  
-You can create the environment using **Conda** or **pip/venv**, as described below.
+### Option 1: Using Conda (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/cns-iu/hra-deepcell-experiments.git
+cd hra-deepcell-experiments
+
+# Create and activate conda environment
+conda create -n hra-deepcell python=3.12
+conda activate hra-deepcell
+
+# Install dependencies
+pip install -r requirements.txt
+pip install git+https://github.com/vanvalenlab/cellSAM.git
+pip install git+https://github.com/vanvalenlab/deepcell-types@master
+```
+
+### Option 2: Using pip/venv
+
+```bash
+# Create and activate virtual environment
+python3.12 -m venv hra-deepcell
+
+# Activate environment
+source hra-deepcell/bin/activate       # macOS/Linux
+hra-deepcell\Scripts\activate          # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+pip install git+https://github.com/vanvalenlab/cellSAM.git
+pip install git+https://github.com/vanvalenlab/deepcell-types@master
+```
 
 ---
 
-### 🧩 Option 1: Using Conda
+## 🔑 API Configuration
 
-1. **Clone this repository**
-   ```bash
-   git clone https://github.com/cns-iu/hra-deepcell-experiments.git
-   cd hra-deepcell-experiments
-   ```
+### DeepCell API
 
-2. **Create and activate the environment**
-   ```bash
-   conda create -n hra-deepcell python=3.12
-   conda activate hra-deepcell
-   ```
+**Step 1:** Obtain your API token
 
-3. **Install dependencies**
-   ```bash  (prefer Python version >= 3.12 )
-   pip install -r requirements.txt
-   pip install git+https://github.com/vanvalenlab/cellSAM.git
-   pip install git+https://github.com/vanvalenlab/deepcell-types@master
-   ```
+1. Visit [DeepCell API Key Management](https://deepcell.readthedocs.io/en/master/API-key.html)
+2. Log in and generate a new API key
+3. Copy the token
 
----
+**Step 2:** Configure the token (choose one method)
 
-### 🧩 Option 2: Using pip (without Conda)
-
-If you’re not using Conda, you can create a standard virtual environment:
-
-1. **Create and activate the environment**
-   ```bash
-   python3.12 -m venv hra-deepcell
-   source hra-deepcell/bin/activate       # On Mac/Linux
-   hra-deepcell\Scripts\activate          # On Windows
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   pip install git+https://github.com/vanvalenlab/cellSAM.git
-   pip install git+https://github.com/vanvalenlab/deepcell-types@master
-   ```
-
----
-
-## 🔑 DeepCell API Configuration
-
-Before running DeepCell for cell type predictions, configure your API access token.
-
-1. Go to [DeepCell API Key Management](https://deepcell.readthedocs.io/en/master/API-key.html).  
-2. Log in and **generate a new API key**.  
-3. Save the token using one of the following methods.
-
----
-
-### ✅ Option 1: Save permanently to Conda environment
+**A. For Conda users (persistent):**
 ```bash
 conda env config vars set -n hra-deepcell DEEPCELL_ACCESS_TOKEN=<your-token>
 conda deactivate && conda activate hra-deepcell
 ```
 
----
+**B. For system environment (persistent):**
 
-### ✅ Option 2: Save permanently for pip users (system environment variable)
-
-**On Mac/Linux:**
+*macOS/Linux:*
 ```bash
 export DEEPCELL_ACCESS_TOKEN=<your-token>
+# Add to ~/.bashrc or ~/.zshrc for persistence
 ```
 
-**On Windows (PowerShell):**
-```bash
+*Windows PowerShell:*
+```powershell
 setx DEEPCELL_ACCESS_TOKEN "<your-token>"
 ```
 
-**On Windows (CMD):**
-```bash
+*Windows CMD:*
+```cmd
 set DEEPCELL_ACCESS_TOKEN=<your-token>
 ```
 
-> 💡 Restart your terminal or IDE after setting the environment variable.
-
----
-
-### ✅ Option 3: Temporary session variable in Python
+**C. In Python (temporary):**
 ```python
 import os
 os.environ["DEEPCELL_ACCESS_TOKEN"] = "<your-token>"
 ```
 
+> 💡 **Note:** Restart your terminal or IDE after setting environment variables.
+
 ---
 
-## 🌐 HuBMAP GLOBUS API Setup
+### HuBMAP Globus API
 
-To enable data access from the [HuBMAP Data Portal](https://docs.hubmapconsortium.org/apis.html) or interact programmatically with the **Search & Index API**, follow these steps for Globus authentication.
+#### 1. Install Atlas Consortia CLI Tools
 
-### ✅ 1. Install Atlas Consortia Command Line Tools
 ```bash
 pip install atlas-consortia-clt
 ```
 
-### ✅ 2. Authenticate using Globus CLI
+#### 2. Authenticate with Globus
+
 ```bash
 globus login --no-local-server
 ```
-Copy the link shown in the terminal, open it in your browser, complete the authentication, and authorize Globus access.
 
-To verify authentication:
+Follow the authentication link in your browser and authorize access.
+
+**Verify authentication:**
 ```bash
 globus whoami --verbose
 ```
 
----
+#### 3. Install Globus Connect Personal
 
-### ✅ 3. Create `manifest.txt` file
-
-Follow the [HuBMAP Manifest File Documentation](https://docs.hubmapconsortium.org/clt/index.html#manfiles) to create a `manifest.txt` file listing the dataset(s) to download.  
-⚠️ **Important:** Ensure that there are **no comments** in the manifest file, as they may cause parsing errors.
-
----
-
-### ✅ 4. Install and Configure Globus Connect Personal
-
-Refer to [How To Install, Configure, and Uninstall Globus Connect Personal for Linux](https://docs.globus.org/globus-connect-personal/install/linux/).  
-You can also download it directly using:
+Download and install Globus Connect Personal:
 
 ```bash
 wget https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz
-```
-
-Extract and navigate into the directory:
-```bash
 tar -xzf globusconnectpersonal-latest.tgz
-cd globusconnectpersonal-x.y.z
-```
-*(Replace `x.y.z` with the extracted version number.)*
-
-Start Globus Connect Personal for the first time:
-```bash
+cd globusconnectpersonal-*
 ./globusconnectpersonal -start &
 ```
-Complete setup as prompted. After setup, exit the directory:
+
+Follow the setup prompts. For detailed instructions, see [Globus Connect Personal for Linux](https://docs.globus.org/globus-connect-personal/install/linux/).
+
+#### 4. Create Manifest File
+
+Create a `manifest.txt` file following the [HuBMAP Manifest File Documentation](https://docs.hubmapconsortium.org/clt/index.html#manfiles).
+
+⚠️ **Important:** Ensure the manifest file contains **no comments**, as they may cause parsing errors.
+
+#### 5. Transfer Data
+
 ```bash
-cd ..
+hubmap-clt transfer manifest.txt -d /path/to/destination/data-original/
 ```
 
----
+> 💡 **Tip:** Use `screen` or `tmux` to run long transfers in the background:
+> ```bash
+> screen -S hubmap-transfer
+> hubmap-clt transfer manifest.txt -d /path/to/destination/
+> # Press Ctrl+A, then D to detach
+> ```
 
-### ✅ 5. Transfer Data using HuBMAP CLI
+#### 6. Troubleshooting: Session Re-authentication
 
-Once authenticated and your `manifest.txt` is ready, you can transfer HuBMAP data using:
+If you see `"Session reauthentication required"`, run:
 
 ```bash
-hubmap-clt transfer manifest.txt -d /teradata/username/deepcell-experiments-data/intestine-codex-stanford
-```
-
-This will initiate a secure data transfer using Globus.
-#### Bonus Tip: Run the download on `Screen` command to ensure good sleep at night.
-
-
-### 5.1. Common Error: “Session reauthentication required”
-
-You may see this message:
-```
-The resource you are trying to access requires you to re-authenticate.
-Session reauthentication required (Globus Transfer)
-```
-
-### Fix: Re-authenticate Globus CLI
-
-The CLI will provide a command like:
-
-```
 globus session update <SESSION-ID>
 ```
 
-*You have successfully updated your CLI session.
+Follow the prompts to re-authenticate.
 
+---
 
+## 🔄 Workflow
 
-### ✅ 6. Run the Scripts
+Navigate to the `scripts/` folder corresponding to your dataset (e.g., `scripts/thymus/`).
 
-Once you have your Input csv of the data with the parent hubmap id's. 
-Get inside the scripts folder and any one of the folder of datasets eg. Thymus”
+### Step 1: Generate Descendant IDs
 
-Steps: 
-1. Using Parent Hubmap ID  derive Descendents ID using (00_hubmap-id_desc.py)
-2. Create Manifest.txt Files for each dataset using (01_manifest_creation.py)
-3. Create config files once you have downloaded the data in the 'data-original' using step 5 command . 
-4. Now you are ready to run the inferencing which will do both `segmentation` and `annotation` in one step. 
+Extract descendant HuBMAP IDs from parent IDs:
 
-
-###  6.1.   Creation of Descendents.
-
-This block finds the descendent hubmap id which is required to download the descendents `pipeline.json` and `.ome.tiff` files. 
-```
+```bash
 python3 00_hubmap-id_desc.py
 ```
 
-#### ⚠️ Remember: “Some Parents will not have descendents, so no need to remove them from the csv file”
+**Input:** CSV file with parent HuBMAP IDs  
+**Output:** CSV with descendant IDs
 
-###  6.2.   Creation of `Manifest.txt`.
+> ⚠️ **Note:** Some parent IDs may not have descendants — this is expected and handled automatically.
 
-This block helps create the manifest file which is to be downloaded by globus for each hubmap id 
-```
+#### Obtaining HuBMAP API Token
+
+To use the API:
+
+1. [Login to HuBMAP Portal](https://portal.hubmapconsortium.org/search/datasets)
+2. Navigate to the [CCF-EUI Portal](https://portal.hubmapconsortium.org/ccf-eui)
+3. Right-click → Inspect → Network tab
+4. Find a request and copy the token from `token=...&` in the URL
+5. Paste the token in `00_hubmap-id_desc.py`
+
+> ⚠️ **Note:** Tokens expire periodically. Repeat this process if authentication fails.
+
+### Step 2: Create Manifest Files
+
+Generate `manifest.txt` files for each dataset:
+
+```bash
 python3 01_manifest_creation.py
 ```
 
-#### Note:  The files which do not have descendent will automatically be taken care of. 
+Datasets without descendants are automatically skipped.
 
-###  6.3.   Download `Manifest.txt` contents.
+### Step 3: Download Data
 
-Read the `Globus.md` for more information related to common errors.
+Transfer data using Globus:
+
+```bash
+hubmap-clt transfer manifest.txt -d /path/to/data-original/
 ```
-hubmap-clt transfer manifest.txt -d /teradata/username/deepcell-experiments-data/intestine-codex-stanford/data-original/
-```
-#### Bonus Tip   1: Don't forget to run the `Screen` command.
 
+> 💡 **Tip:** Run in a `screen` session for long downloads.
 
-###  6.4.   Creation `config.yaml` and clean file structure names in .
+### Step 4: Generate Configuration Files
 
-this will create a config.yaml file which has the `nucleus_channel` and `cell_channel` and a renamed file structure in input-data
-```
+Create `config.yaml` files with channel information:
+
+```bash
 python3 02_hubmap-config.py
 ```
 
-###  6.5.   Final Step: Run inferencing on the input-data (Segmentation + Annotation):
+This script:
+- Extracts `nucleus_channel` and `cell_channel` from pipeline metadata
+- Restructures file names in `input-data/`
+- Generates configuration files for inference
 
-Navigate to teh `src` file to run this for output. Which takes two things as an input :
-a. the input file location
-b. the output file location
+### Step 5: Run Inference Pipeline
 
+Navigate to the `src/` directory and run:
+
+```bash
+python run_inference_pipeline.py \
+    --input_root /path/to/input-data/ \
+    --output_root /path/to/output-data/
 ```
-python run_inference_pipeline.py --input_root /teradata/sbdubey/deepcell-experiments-data/intestine-codex-stanford/input-data/ --output_root /teradata/sbdubey/deepcell-experiments-data/intestine-codex-stanford/output-data/
+
+**What happens:**
+1. **Segmentation** — CellSAM identifies cell boundaries
+2. **Annotation** — DeepCell Types predicts cell types
+3. **Output generation** — Masks, CSVs, and summaries are saved
+
+> ⚠️ **Note:** Datasets missing `nucleus_channel` will be automatically skipped.
+
+#### Running Multiple GPU Processes
+
+To utilize multiple GPUs simultaneously:
+
+```bash
+# Terminal 1 (GPU 0)
+CUDA_VISIBLE_DEVICES=0 python run_inference_pipeline.py \
+    --input_root /path/to/input-data-1/ \
+    --output_root /path/to/output-data-1/ &
+
+# Terminal 2 (GPU 1)
+CUDA_VISIBLE_DEVICES=1 python run_inference_pipeline.py \
+    --input_root /path/to/input-data-2/ \
+    --output_root /path/to/output-data-2/
 ```
-#### ⚠️ Remember: “Some data will have missing `nucleus_channel`so the segmentation process will not work for those cases and skip to next example. 
-#### Bonus Points 1: The code run segmentation -> Annotation for a single example then for next, next .... 
-#### Bonus Point  2: To run two seperate process on GPU make sure to run the command with 👇 on two seperate `Screen`
-```
-CUDA_VISIBLE_DEVICES=0 python run_inference_pipeline.py ... &
-CUDA_VISIBLE_DEVICES=1 python run_inference_pipeline.py ...
-```
+
+> 💡 **Tip:** Run each command in a separate `screen` session.
+
 ---
-
-
-### ✅  For API of Descendents follow the steps:
-
-#### ⚠️ Remember: You need to be the member of HuBMAP for using this Token
-
-1. [Login to HuBMAP](https://portal.hubmapconsortium.org/search/datasets?N4IgzgxgYglgdgEwAoEMBOKC2YQC5gC+BQA)
-2. [Right click on the EUI portal and click Inspect](https://portal.hubmapconsortium.org/ccf-eui)
-3. Copy the Code of token (after Token= until before `&` ) eg: token=`AgzPl9yNgdeQlbadgzvPjq0d89OMgJM56ql0lMeW6K7Ddw9m7MfkClj13rpknp4Go0nPYm0N9xxv2Pxxxxxxxxxxxxxx`&quot;
-4. Paste this the `00_hubmap-id_desc.py` 
-
-#### ⚠️ Remember: The Token expires in some time so re-do the same process again. 
-
 
 ## 📊 Expected Outputs
 
-After a successful run, you will obtain:
-- **`mask.tif`** — labeled segmentation masks  
-- **`cell_populations.csv`** — morphological cell metrics  
-- **`cell_types.csv`** — annotated cell types  
+After a successful run, each dataset will produce:
+
+```
+output-data/
+├── <dataset-id>/
+│   ├── mask.tif                    # Segmentation masks
+│   ├── cell_populations.csv        # Morphological metrics
+│   ├── cell_types.csv              # Cell type annotations
+```
+
+**File descriptions:**
+- **`mask.tif`** — Labeled instance segmentation masks
+- **`cell_populations.csv`** — Per-cell morphological features (area, perimeter, etc.)
+- **`cell_types.csv`** — Cell type predictions with confidence scores
+
+---
+
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+**Issue:** `ModuleNotFoundError: No module named 'cellSAM'`  
+**Solution:** Ensure you installed CellSAM from source:
+```bash
+pip install git+https://github.com/vanvalenlab/cellSAM.git
+```
+
+**Issue:** `DeepCell API authentication failed`  
+**Solution:** Verify your token is set correctly:
+```bash
+echo $DEEPCELL_ACCESS_TOKEN
+```
+
+**Issue:** `CUDA out of memory`  
+**Solution:** Reduce batch size or process fewer images at once. Use `CUDA_VISIBLE_DEVICES` to assign specific GPUs.
+
+**Issue:** Globus transfer stalls  
+**Solution:** Ensure Globus Connect Personal is running:
+```bash
+./globusconnectpersonal -status
+```
+
+**Issue:** Missing nucleus channel  
+**Solution:** This is expected for some datasets. The pipeline will automatically skip them and continue.
 
 ---
 
 ## 🧠 References
 
-- [CellSAM Documentation](https://vanvalenlab.github.io/cellSAM/tutorial.html)  
-- [DeepCell Types Tutorial](https://vanvalenlab.github.io/deepcell-types/site/tutorial.html)  
-- [DeepCell API Setup](https://deepcell.readthedocs.io/en/master/API-key.html)  
-- [HuBMAP API Reference](https://docs.hubmapconsortium.org/apis.html)  
-- [HuBMAP CLT Guide](https://docs.hubmapconsortium.org/clt/index.html#manfiles)
+- **CellSAM:** [Documentation](https://vanvalenlab.github.io/cellSAM/tutorial.html) | [GitHub](https://github.com/vanvalenlab/cellSAM)
+- **DeepCell Types:** [Tutorial](https://vanvalenlab.github.io/deepcell-types/site/tutorial.html) | [GitHub](https://github.com/vanvalenlab/deepcell-types)
+- **DeepCell API:** [Setup Guide](https://deepcell.readthedocs.io/en/master/API-key.html)
+- **HuBMAP:** [API Reference](https://docs.hubmapconsortium.org/apis.html) | [CLI Guide](https://docs.hubmapconsortium.org/clt/index.html)
+- **Globus:** [Connect Personal Installation](https://docs.globus.org/globus-connect-personal/install/linux/)
 
 ---
+
+
+
+
