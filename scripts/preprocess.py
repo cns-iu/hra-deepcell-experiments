@@ -1,3 +1,4 @@
+# Note place this code in Ross Repo and directly run it using 'python3 preprocess.py' 
 import os
 import pandas as pd
 
