@@ -172,13 +172,14 @@ cd ..
 Once authenticated and your `manifest.txt` is ready, you can transfer HuBMAP data using:
 
 ```bash
-hubmap-clt transfer manifest.txt
+hubmap-clt transfer manifest.txt -d /teradata/username/deepcell-experiments-data/intestine-codex-stanford
 ```
 
 This will initiate a secure data transfer using Globus.
+#### Bonus Tip: Run the download on `Screen` command to ensure good sleep at night.
 
 
-### ⚠️ 5.1. Common Error: “Session reauthentication required”
+### 5.1. Common Error: “Session reauthentication required”
 
 You may see this message:
 ```
@@ -196,9 +197,84 @@ globus session update <SESSION-ID>
 
 *You have successfully updated your CLI session.
 
-### ⚠️ Common Error: “Markers are extracted from the .ome.tiff metadata and not the pipeline_config.json due to mismatch size”
 
+
+### ✅ 6. Run the Scripts
+
+Once you have your Input csv of the data with the parent hubmap id's. 
+Get inside the scripts folder and any one of the folder of datasets eg. Thymus”
+
+Steps: 
+1. Using Parent Hubmap ID  derive Descendents ID using (00_hubmap-id_desc.py)
+2. Create Manifest.txt Files for each dataset using (01_manifest_creation.py)
+3. Create config files once you have downloaded the data in the 'data-original' using step 5 command . 
+4. Now you are ready to run the inferencing which will do both `segmentation` and `annotation` in one step. 
+
+
+###  6.1.   Creation of Descendents.
+
+This block finds the descendent hubmap id which is required to download the descendents `pipeline.json` and `.ome.tiff` files. 
+```
+python3 00_hubmap-id_desc.py
+```
+
+#### ⚠️ Remember: “Some Parents will not have descendents, so no need to remove them from the csv file”
+
+###  6.2.   Creation of `Manifest.txt`.
+
+This block helps create the manifest file which is to be downloaded by globus for each hubmap id 
+```
+python3 01_manifest_creation.py
+```
+
+#### Note:  The files which do not have descendent will automatically be taken care of. 
+
+###  6.3.   Download `Manifest.txt` contents.
+
+Read the `Globus.md` for more information related to common errors.
+```
+hubmap-clt transfer manifest.txt -d /teradata/username/deepcell-experiments-data/intestine-codex-stanford/data-original/
+```
+#### Bonus Tip   1: Don't forget to run the `Screen` command.
+
+
+###  6.4.   Creation `config.yaml` and clean file structure names in .
+
+this will create a config.yaml file which has the `nucleus_channel` and `cell_channel` and a renamed file structure in input-data
+```
+python3 02_hubmap-config.py
+```
+
+###  6.5.   Final Step: Run inferencing on the input-data (Segmentation + Annotation):
+
+Navigate to teh `src` file to run this for output. Which takes two things as an input :
+a. the input file location
+b. the output file location
+
+```
+python run_inference_pipeline.py --input_root /teradata/sbdubey/deepcell-experiments-data/intestine-codex-stanford/input-data/ --output_root /teradata/sbdubey/deepcell-experiments-data/intestine-codex-stanford/output-data/
+```
+#### ⚠️ Remember: “Some data will have missing `nucleus_channel`so the segmentation process will not work for those cases and skip to next example. 
+#### Bonus Points 1: The code run segmentation -> Annotation for a single example then for next, next .... 
+#### Bonus Point  2: To run two seperate process on GPU make sure to run the command with 👇 on two seperate `Screen`
+```
+CUDA_VISIBLE_DEVICES=0 python run_inference_pipeline.py ... &
+CUDA_VISIBLE_DEVICES=1 python run_inference_pipeline.py ...
+```
 ---
+
+
+### ✅  For API of Descendents follow the steps:
+
+#### ⚠️ Remember: You need to be the member of HuBMAP for using this Token
+
+1. [Login to HuBMAP](https://portal.hubmapconsortium.org/search/datasets?N4IgzgxgYglgdgEwAoEMBOKC2YQC5gC+BQA)
+2. [Right click on the EUI portal and click Inspect](https://portal.hubmapconsortium.org/ccf-eui)
+3. Copy the Code of token (after Token= until before `&` ) eg: token=`AgzPl9yNgdeQlbadgzvPjq0d89OMgJM56ql0lMeW6K7Ddw9m7MfkClj13rpknp4Go0nPYm0N9xxv2Pxxxxxxxxxxxxxx`&quot;
+4. Paste this the `00_hubmap-id_desc.py` 
+
+#### ⚠️ Remember: The Token expires in some time so re-do the same process again. 
+
 
 ## 📊 Expected Outputs
 
